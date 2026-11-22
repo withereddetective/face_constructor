@@ -50,7 +50,7 @@ class FaceReconstructionWorker(QThread):
         with self._frame_lock:
             if self._latest_frame is None:
                 return None
-            return self._latest_frame.copy()
+            return self._latest_frame
 
     @staticmethod
     def _face_box(
@@ -158,18 +158,33 @@ class FaceReconstructionWorker(QThread):
                     self.hold_started.emit(frozen_frame)
                     self._set_boxes([])
                     filename = f"face_{time.strftime('%Y%m%d_%H%M%S')}_{time.time_ns()}"
-                    obj_path = pipeline.mesh_exporter.export_mesh(
-                        mesh,
-                        filename,
-                        format="obj",
-                        include_texture=False,
-                    )
-                    stl_path = pipeline.mesh_exporter.export_mesh(
-                        mesh,
-                        filename,
-                        format="stl",
-                        include_texture=False,
-                    )
+                    if mesh is None:
+                        self.error_occurred.emit(
+                            "3D face reconstruction failed: no mesh was available to export."
+                        )
+                        break
+                    try:
+                        obj_path = pipeline.mesh_exporter.export_mesh(
+                            mesh,
+                            filename,
+                            format="obj",
+                            include_texture=False,
+                        )
+                        stl_path = pipeline.mesh_exporter.export_mesh(
+                            mesh,
+                            filename,
+                            format="stl",
+                            include_texture=False,
+                        )
+                    except Exception as exc:
+                        vertex_count = len(mesh.vertices)
+                        triangle_count = len(mesh.triangles)
+                        self.error_occurred.emit(
+                            "3D face reconstruction failed: "
+                            f"could not export mesh ({vertex_count} vertices, "
+                            f"{triangle_count} triangles): {exc}"
+                        )
+                        break
                     self.result_ready.emit(obj_path, stl_path)
                     self.msleep(int(RESULT_DISPLAY_SECONDS * 1000))
                     if self.isInterruptionRequested():
@@ -203,6 +218,8 @@ class FaceWindow(QWidget):
         )
 
         self._camera = cv2.VideoCapture(0)
+        self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         self._holding = False
         self._failed = False
         self._error_label = QLabel()

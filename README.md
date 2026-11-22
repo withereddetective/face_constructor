@@ -20,4 +20,3 @@ python app.py
 
 The reconstruction model and mesh exporter are loaded from
 `3D-FaceReconstruction`. The app displays the paths to the generated OBJ and
-STL files when export is complete.
